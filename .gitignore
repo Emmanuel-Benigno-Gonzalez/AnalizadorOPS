@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# mypy
+.mypy_cache/
+
+# Pytest
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs and local settings
+*.log
+*.env
+*.local
+*.DS_Store
+
+# SQLite database files
+*.sqlite3
+
+# Entorno virtual de Python (en Windows)
+Scripts/
+Lib/
+pyvenv.cfg
+
+
+# __MACOSX for macOS zip extractions
+__MACOSX/
+
+
+2021 Excel
+2022 Excel
+2023 Excel
+2024 Excel
+2025 Excel
+ABRIL 2025
+BD AEROPUERTOS
+BD AFAC
+BORRADORES
+Data
+VERSION 01
+Historial de archivos.xlsx
+INSTRUCCIONES.txt
+Reporte de Errores.xlsx
+verificadores Borrador.txt
