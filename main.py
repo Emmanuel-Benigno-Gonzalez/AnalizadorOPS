@@ -51,12 +51,13 @@ def main():
                 validar.verificar_Nulos(df_master, "CONSECUTIVO", nombre_archivo)
                 validar.verificar_EsDigito(df_master, "CONSECUTIVO", nombre_archivo)
                 if not validar.errorTipoDato or validar.errorIndefinido:
-                    validar.verificar_Nulos(df_master, "FECHA", nombre_archivo)
+                    #validar.verificar_Nulos(df_master, "FECHA", nombre_archivo) -- se valida en verificar_fhecha
+                    validar.verificar_Nulos(df_master, "CALF.", nombre_archivo)
                     validar.verificar_Nulos(df_master, "MATRICULA", nombre_archivo)
                     validar.verificar_Nulos(df_master, "ORIGEN", nombre_archivo)
                     validar.verificar_Nulos(df_master, "DESTINO", nombre_archivo)
                     #validar.verificar_Nulos(df_master, "TIPO / MOV", nombre_archivo)
-                    validar.verificar_Nulos(df_master, "HORA", nombre_archivo)
+                    #validar.verificar_Nulos(df_master, "HORA", nombre_archivo)
                     validar.verificar_Fecha(df_master, "FECHA", nombre_archivo)
                     #validar.verificar_Espacios(df_master, "MATRICULA", nombre_archivo)
                     validar.verificar_LetrasNumeros(df_master, "MATRICULA", nombre_archivo)

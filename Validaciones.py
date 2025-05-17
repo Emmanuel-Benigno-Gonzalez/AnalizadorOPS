@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 import numpy as np
 
 class Validacion: 
@@ -100,15 +101,41 @@ class Validacion:
         df_AvGeneral = df
 
         for index, valor in df_AvGeneral[columna].items():
-            if pd.isna(valor):
-                self._errorTipoDato.append({
-                    "Archivo": nombre_archivo,
-                    "Columna": columna,
-                    "Indice": index + 1,
-                    "Error": valor,
-                    "Mensaje": "Valor Null",
-                    "Correccion": ""
-                })
+            if df_AvGeneral.loc[index, 'CALF.'] != 'CXL':
+                if pd.isna(valor):
+                    self._errorTipoDato.append({
+                        "Archivo": nombre_archivo,
+                        "Columna": columna,
+                        "Indice": index + 1,
+                        "Error": valor,
+                        "Mensaje": "Valor Null",
+                        "Correccion": ""
+                    })
+            else:
+                if columna == 'MATRICULA':
+                    if pd.isna(valor):
+                        self._errorCorregido.append({
+                            "Archivo": nombre_archivo,
+                            "Columna": columna,
+                            "Indice": index + 1,
+                            "Error": valor,
+                            "Mensaje": "Valor Null",
+                            "Correccion": "Se asigno XXXXX"
+                        })
+                        df.at[index, columna] = 'XXXXX'
+                else: 
+                    if columna == 'HORA':
+                        if pd.isna(valor):
+                            self._errorCorregido.append({
+                                "Archivo": nombre_archivo,
+                                "Columna": columna,
+                                "Indice": index + 1,
+                                "Error": valor,
+                                "Mensaje": "Valor Null",
+                                "Correccion": "Se inicializo 00:00:00"
+                            })
+                            df.at[index, columna] = '00:00:00'
+
 
     def verificar_Espacios(self, df: pd.DataFrame, columna: str, nombre_archivo: str):
 
@@ -158,30 +185,63 @@ class Validacion:
                     # Aplicar la corrección en el DataFrame
                     df.at[index, columna] = valor_corregido
 
+    def fecha_correta(self, df: pd.DataFrame, columna: str):
+        
+        try:
+            fecha_corregida = df[columna].mode()[0]
+            return pd.to_datetime(fecha_corregida, errors='raise').date()
+        except Exception as e:
+            print(f"Error al obtener fecha correcta", e)
+
     
     def verificar_Fecha(self, df: pd.DataFrame, columna: str, nombre_archivo: str):
         
         #df_AvGeneral = df[df['TIPO_OPER'] == 'AVIACION GENERAL']
         df_AvGeneral = df
+        fecha_corregida = self.fecha_correta(df,columna)
 
         try:  
             for index, valor in df_AvGeneral[columna].items():
                 try:
                     #df_AvGeneral.at[index, columna] = pd.to_datetime(valor, errors='raise')
                     fecha = pd.to_datetime(valor, errors='raise').date()
-                    df_AvGeneral.at[index, columna] = fecha
+                    if fecha == fecha_corregida:
+                        df_AvGeneral.at[index, columna] = fecha
+                    else:
+                        if pd.isna(fecha):
+                            self._errorCorregido.append({
+                                "Archivo": nombre_archivo,
+                                "Columna": columna,
+                                "Indice": index + 1,
+                                "Error": valor,
+                                "Mensaje": "Valor Null",
+                                "Correccion": fecha_corregida
+                            })
+                            df.at[index, columna] = fecha_corregida
+                        else:
+                            self._errorCorregido.append({
+                                "Archivo": nombre_archivo,
+                                "Columna": columna,
+                                "Indice": index + 1,
+                                "Error": valor,
+                                "Mensaje": "Fecha Incorrecta",
+                                "Correccion": fecha_corregida
+                            })
+                            df.at[index, columna] = fecha_corregida
                 except Exception:
-                    self._errorTipoDato.append({
+                    self._errorCorregido.append({
                         "Archivo": nombre_archivo,
                         "Columna": columna,
                         "Indice": index + 1,
                         "Error": valor,
                         "Mensaje": "Error en el Tipo de Dato",
-                        "Correccion": ""
+                        "Correccion": fecha_corregida
                     })
+                    df.at[index, columna] = fecha_corregida
         
         except Exception as e:
             print(f"Error al verificar fechas: {nombre_archivo}")
+
 
     def verificar_EsDigito(self, df: pd.DataFrame, columna: str, nombre_archivo: str):
         
@@ -306,77 +366,127 @@ class Validacion:
                         })
                         df.at[index, columna] = "L"
 
-    
+
+    def _corregir_formato_hora(self, valor: str) -> str:
+        '''Corrige múltiples formatos erróneos de hora y extrae desde fecha u hora compacta.'''
+        if not isinstance(valor, str):
+            return None
+
+        valor = valor.strip().lower()
+        valor = re.sub(r'\s+', ' ', valor)
+
+        # Eliminar fecha si viene incluida (extraer solo lo que parece hora)
+        match = re.search(r'(\d{1,2}[:;.\-]?\d{1,2}([:;.\-]?\d{1,2})?\s*(a\.?m\.?|p\.?m\.?)?)$', valor)
+        if match:
+            valor = match.group(1)
+
+        # Reemplazar separadores incorrectos
+        valor = valor.replace(';', ':').replace('-', ':').replace('.', ':')
+
+        # Verificar si contiene AM/PM
+        es_pm = 'p.m' in valor or 'pm' in valor
+        es_am = 'a.m' in valor or 'am' in valor
+        valor = re.sub(r'\s*(a\.?m\.?|p\.m\.?)', '', valor)
+
+        # Quitar todo excepto números y dos puntos
+        solo_digitos = re.sub(r'[^\d]', '', valor)
+
+        # Si es formato compacto (como 091000, 0910, etc.)
+        if len(solo_digitos) == 6:
+            hh, mm, ss = solo_digitos[:2], solo_digitos[2:4], solo_digitos[4:]
+        elif len(solo_digitos) == 4:
+            hh, mm, ss = solo_digitos[:2], solo_digitos[2:], '00'
+        elif len(solo_digitos) == 2:
+            hh, mm, ss = solo_digitos, '00', '00'
+        else:
+            # Intentar extraer partes por separadores
+            partes = re.split(r'[:]', valor)
+            if len(partes) == 2:
+                hh, mm, ss = partes[0], partes[1], '00'
+            elif len(partes) == 3:
+                hh, mm, ss = partes
+            else:
+                return None
+
+        # Validación básica
+        try:
+            hh = int(hh)
+            mm = int(mm)
+            ss = int(ss)
+        except:
+            return None
+
+        # Corrección de overflow
+        if mm > 59:
+            mm = mm % 60
+        if ss > 59:
+            ss = ss % 60
+
+        # Corrección AM/PM
+        if es_pm and hh < 12:
+            hh += 12
+        elif es_am and hh == 12:
+            hh = 0
+
+        # Reconstruir
+        return f"{str(hh).zfill(2)}:{str(mm).zfill(2)}:{str(ss).zfill(2)}"
+
+
     def verificar_Hora(self, df: pd.DataFrame, columna: str, nombre_archivo: str):
         '''Corrige errores en la columna de horas y asigna valores promedio cuando sea necesario.'''
 
-        try:
-            # Reemplazar ';' por ':' y limpiar espacios extra
-            df[columna] = df[columna].astype(str).str.replace(';', ':').str.strip()
-
-            # Normalizar valores con formatos incorrectos
-            df[columna] = df[columna].str.replace(r'^[;:]+|[;:]+$', '', regex=True)  # Eliminar ';' o ':' al inicio o final
-            df[columna] = df[columna].str.replace(r'(\d{2}):(\d{2})(\d{2})$', r'\1:\2:\3', regex=True)  # Corregir formatos sin ':'
-
-            # Agregar ':00' a valores en formato h:mm o hh:mm (sin segundos)
-            df[columna] = df[columna].str.replace(r'^(\d{1,2}):(\d{2})$', r'\1:\2:00', regex=True)
-
-            # Agregar un "0" al inicio si la hora tiene solo una cifra (ej: 9:30 → 09:30:00)
-            df[columna] = df[columna].str.replace(r'^(\d):', r'0\1:', regex=True)
-
-            # Intentar convertir a formato de hora
-            df["hora_valida"] = pd.to_datetime(df[columna], format='%H:%M:%S', errors='coerce').dt.time
-
-            # Identificar errores
-            errores_df = df[df[columna].notna() & df["hora_valida"].isna()]
-
-            # Registrar errores detallados
-            for idx in errores_df.index:
-                valor_original = df.at[idx, columna]
-                limpio = ''.join(filter(lambda x: x.isdigit() or x == ':', valor_original))
-
+        for index, valor in df[columna].items():
+            try:
+                # Intentar convertir directamente
+                hora = pd.to_datetime(valor, format='%H:%M:%S', errors='raise').time()
+                df.at[index, columna] = hora
+            except Exception:
+                # Intentar corrección
+                valor_corregido = self._corregir_formato_hora(str(valor))
                 try:
-                    df.at[idx, "hora_valida"] = pd.to_datetime(limpio, format='%H:%M:%S').time()
-                    self._correcciones.append(f"Fila {idx+1}: '{valor_original}' corregido a '{df.at[idx, 'hora_valida']}'")
-                except:
-                    df.at[idx, "hora_valida"] = np.nan
-                    self._errorTipoDato.append({
+                    hora = pd.to_datetime(valor_corregido, format='%H:%M:%S', errors='raise').time()
+                    df.at[index, columna] = hora
+                    self._errorCorregido.append({
                         "Archivo": nombre_archivo,
                         "Columna": columna,
-                        "Indice": idx + 1,
-                        "Error": valor_original,
-                        "Mensaje": "Formato de hora incorrecto",
-                        "Correccion": "hh:mm:ss (Ej: 09:30:00)"
+                        "Indice": index + 1,
+                        "Error": valor,
+                        "Mensaje": "Hora Corregida",
+                        "Correccion": valor_corregido
                     })
-
-            # Asignar valores promedio para nulos
-            for idx in df[df["hora_valida"].isna()].index:
-                prev_idx = idx - 1 if idx > 0 else None
-                next_idx = idx + 1 if idx < len(df) - 1 else None
-
-                prev_time = df.at[prev_idx, "hora_valida"] if prev_idx is not None else None
-                next_time = df.at[next_idx, "hora_valida"] if next_idx is not None else None
-
-                if prev_time and next_time:
-                    avg_hour = (pd.Timestamp(prev_time).hour + pd.Timestamp(next_time).hour) // 2
-                    avg_min = (pd.Timestamp(prev_time).minute + pd.Timestamp(next_time).minute) // 2
-                    avg_sec = (pd.Timestamp(prev_time).second + pd.Timestamp(next_time).second) // 2
-                    df.at[idx, "hora_valida"] = f"{avg_hour:02}:{avg_min:02}:{avg_sec:02}"
-                    self._correcciones.append(f"Fila {idx+1}: Asignado promedio '{df.at[idx, 'hora_valida']}'")
-                else:
-                    self._errorTipoDato.append({
+                except Exception:
+                    # Si falla, usar 00:00:00
+                    df.at[index, columna] = pd.to_datetime("00:00:00").time()
+                    self._errorCorregido.append({
                         "Archivo": nombre_archivo,
                         "Columna": columna,
-                        "Indice": idx + 1,
-                        "Error": "Valor nulo",
-                        "Mensaje": "No se pudo asignar un valor promedio",
-                        "Correccion": "Revisar manualmente"
+                        "Indice": index + 1,
+                        "Error": valor,
+                        "Mensaje": "Hora Incorrecta",
+                        "Correccion": "00:00:00"
                     })
 
-        except Exception as e:
-            print(f"Error al verificar Hora: {nombre_archivo}")
+        return df, self._errorCorregido
+    
+    
+    def verificar_hora_iti_real(self, df: pd.DataFrame, columna: str, nombre_archivo: str):
 
-        return df, self._correcciones
+        df_AvGeneral = df
+            
+        for index, valor in df_AvGeneral[columna].items():
+            #HORA REAL = HORA DE ITINERARIO
+            if df_AvGeneral.loc[index, 'CALF.'] == ['RP', 'FP', 'RC', 'FC']:
+                if pd.isna(valor):
+                    self._errorCorregido.append({
+                        "Archivo": nombre_archivo,
+                        "Columna": columna,
+                        "Indice": index + 1,
+                        "Error": valor,
+                        "Mensaje": "Valor Null",
+                        "Correccion": "Se inicializo 00:00:00"
+                    })
+                    df.at[index, columna] = '00:00:00'
+        
     
     def generar_reporte_validaciones(self, estado: str):
         
